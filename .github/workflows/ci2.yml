@@ -1,0 +1,85 @@
+name: eshoponweb-enterprise-ci
+
+on:
+  push:
+    branches: [ 'feature/*' ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  SOLUTION_FILE: 'eShopOnWeb.sln'
+
+jobs:
+
+# ---------------- RESTORE ----------------
+  restore:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+# ---------------- BUILD ----------------
+  build:
+    needs: restore
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Build solution
+      run: dotnet build ${{ env.SOLUTION_FILE }} --no-restore --configuration Release
+
+# ---------------- TEST ----------------
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Run tests
+      run: dotnet test ${{ env.SOLUTION_FILE }} --no-build --configuration Release --verbosity normal
+
+# ---------------- PUBLISH ARTIFACT ----------------
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Publish app
+      run: dotnet publish src/Web/Web.csproj -c Release -o publish
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: eshop-build
+        path: publish
